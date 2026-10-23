@@ -21,14 +21,16 @@
   const toast = document.querySelector("#toast");
   const overlayTitle = document.querySelector("#overlay-title");
   const overlayCopy = document.querySelector("#overlay-copy");
+  const levelLesson = document.querySelector("#level-lesson");
+  const starRule = document.querySelector("#star-rule");
   const levelLabel = document.querySelector("#level-label");
 
   const WORLD = { width: 2200, height: 1500 };
   const LEVELS = [
-    { name: "The Quiet Garden", objective: "Find the scattered lights", lights: [[1000, 700, "gold"], [1250, 560, "gold"], [780, 1000, "gold"], [1400, 1050, "gold"]], moths: [["drifter", 600, 480]] },
-    { name: "The Long Way Home", objective: "Follow the lantern trail", lights: [[370, 750, "gold"], [1440, 300, "gold"], [1780, 470, "blue"], [1610, 920, "gold"], [1110, 510, "gold"]], moths: [["drifter", 530, 470], ["chaser", 1460, 650]] },
-    { name: "River of Dreams", objective: "Cross the river for the lights", lights: [[370, 750, "gold"], [740, 1030, "gold"], [1170, 1080, "blue"], [1610, 920, "gold"], [1900, 1190, "green"], [1440, 300, "gold"]], moths: [["drifter", 500, 480], ["chaser", 1490, 680], ["drifter", 1840, 900]] },
-    { name: "The Mothlight Nest", objective: "Break the nest's moonlit guard", lights: [[460, 330, "gold"], [790, 245, "blue"], [1440, 300, "gold"], [1780, 470, "hot"], [370, 750, "gold"], [1610, 920, "green"], [1900, 1190, "gold"]], moths: [["drifter", 600, 540], ["chaser", 1510, 680], ["dasher", 1020, 1190], ["orbiter", 1780, 470]] }
+    { name: "The Quiet Garden", objective: "Find the scattered lights", lesson: "First, a quiet wander. Drifters only attack when you get close.", lights: [[1000, 700, "gold"], [1250, 560, "gold"], [780, 1000, "gold"], [1400, 1050, "gold"]], moths: [["drifter", 600, 480]] },
+    { name: "The Long Way Home", objective: "Follow the lantern trail", lesson: "A chaser remembers your glow. A blue light slows moths, not you.", lights: [[370, 750, "gold"], [1440, 300, "gold"], [1780, 470, "blue"], [1610, 920, "gold"], [1110, 510, "gold"]], moths: [["drifter", 530, 470], ["chaser", 1460, 650]] },
+    { name: "River of Dreams", objective: "Cross the river for the lights", lesson: "The river tugs downstream. Bushes hide you, but moths search your last trail.", lights: [[370, 750, "gold"], [740, 1030, "blue"], [1170, 1080, "gold"], [1610, 920, "gold"], [1900, 1190, "green"], [1440, 300, "gold"]], moths: [["drifter", 500, 480], ["chaser", 1490, 680], ["drifter", 1840, 900]] },
+    { name: "The Mothlight Nest", objective: "Break the nest's moonlit guard", lesson: "Dashers flash before lunging. Lure orbiters away, then circle back.", lights: [[460, 330, "gold"], [790, 245, "blue"], [1440, 300, "gold"], [1780, 470, "hot"], [370, 750, "gold"], [1610, 920, "green"], [1900, 1190, "gold"]], moths: [["drifter", 600, 540], ["chaser", 1510, 680], ["dasher", 1020, 1190], ["orbiter", 1780, 470]] }
   ];
   const keys = new Set();
   const lights = [];
@@ -63,13 +65,17 @@
   let score = 0;
   let checkpointScore = 0;
   let lastCollectAt = 0;
-  let dashCooldown = 0;
   let dashTime = 0;
   let invulnerability = 0;
   let hitShake = 0;
   let collectFreeze = 0;
   let playerHidden = false;
   let mothSlowTime = 0;
+  let bushHiddenTime = 0;
+  let bushRevealTime = 0;
+  let hitSources = { drifter: 0, chaser: 0, dasher: 0, orbiter: 0 };
+  let abilityCooldown = 0;
+  let shownSlowSecond = -1;
   let resultWon = false;
   let musicGain;
   let ambienceOscillators = [];
@@ -77,7 +83,6 @@
   let ambienceLevel = .18;
   let bestTimes = {};
   let pulseTime = 0;
-  let pulseCooldown = 0;
   let hitFlash = 0;
   let elapsed = 0;
   let lastFrame = 0;
@@ -94,7 +99,7 @@
   function resize() {
     viewWidth = innerWidth;
     viewHeight = innerHeight;
-    dpr = Math.min(devicePixelRatio || 1, 2);
+    dpr = Math.min(devicePixelRatio || 1, 1.5);
     canvas.width = Math.round(viewWidth * dpr);
     canvas.height = Math.round(viewHeight * dpr);
     canvas.style.width = `${viewWidth}px`;
@@ -117,7 +122,7 @@
       lilyPads.push({ x, y, size: 5 + random() * 9, phase: random() * 6 });
     }
 
-    for (let i = 0; i < 66; i++) {
+    for (let i = 0; i < 42; i++) {
       const x = 55 + random() * (WORLD.width - 110);
       const shoreY = 700 + 135 * Math.sin((x - 200) / 385);
       const side = random() < .5 ? -1 : 1;
@@ -130,14 +135,14 @@
       }
     }
 
-    for (let i = 0; i < 52; i++) {
+    for (let i = 0; i < 32; i++) {
       const x = random() * WORLD.width;
       const y = random() * WORLD.height;
       if (Math.abs(y - (700 + 135 * Math.sin((x - 200) / 385))) < 105) continue;
       bloomSpots.push({ x, y, size: 2 + random() * 2, phase: random() * 6, tint: random() });
     }
 
-    for (let i = 0; i < 570; i++) {
+    for (let i = 0; i < 360; i++) {
       const x = random() * WORLD.width;
       const y = random() * WORLD.height;
       const shore = 700 + 135 * Math.sin((x - 200) / 385);
@@ -145,14 +150,14 @@
       reeds.push({ x, y, height: 8 + random() * 19, bend: (random() - .5) * 12, phase: random() * 6, tint: Math.floor(random() * 3) });
     }
 
-    for (let i = 0; i < 215; i++) {
+    for (let i = 0; i < 145; i++) {
       const x = random() * WORLD.width;
       const y = random() * WORLD.height;
       if (Math.abs(y - (700 + 135 * Math.sin((x - 200) / 385))) < 90) continue;
       flowers.push({ x, y, size: 1.4 + random() * 2.3, phase: random() * 6, tint: random() });
     }
 
-    for (let i = 0; i < 145; i++) {
+    for (let i = 0; i < 100; i++) {
       stars.push({ x: random() * WORLD.width, y: random() * WORLD.height, size: .5 + random() * 1.5, phase: random() * 7 });
     }
   }
@@ -176,7 +181,8 @@
         type, x, y, vx: 0, vy: 0, homeX: x, homeY: y, phase: random() * 8,
         speed: (type === "dasher" ? 78 : type === "chaser" ? 49 : type === "orbiter" ? 60 : 52) * speedScale,
         stunned: 0, targetLight, wanderX: x, wanderY: y, wanderTimer: 0,
-        state: "idle", stateTime: 0, attackX: 0, attackY: 0, turn: random() * 6 + index
+        state: "idle", stateTime: 0, attackX: 0, attackY: 0, turn: random() * 6 + index,
+        lastKnownX: player.x, lastKnownY: player.y, searchTime: 0, alertTime: 0
       });
     });
     player.x = 1100;
@@ -189,14 +195,17 @@
     levelElapsed = 0;
     levelHitCount = 0;
     lives = difficultySelect.value === "cozy" ? 5 : difficultySelect.value === "moonless" ? 1 : 3;
-    pulseCooldown = 0;
-    dashCooldown = 0;
     dashTime = 0;
     invulnerability = 0;
     hitFlash = 0;
     hitShake = 0;
     collectFreeze = 0;
     mothSlowTime = 0;
+    shownSlowSecond = -1;
+    bushHiddenTime = 0;
+    bushRevealTime = 0;
+    abilityCooldown = 0;
+    hitSources = { drifter: 0, chaser: 0, dasher: 0, orbiter: 0 };
     playerHidden = false;
     resultWon = false;
     keys.clear();
@@ -207,6 +216,10 @@
     progressFill.style.width = "0";
     levelLabel.textContent = `LEVEL ${levelIndex + 1} · ${level.name.toUpperCase()}`;
     objectiveText.textContent = level.objective;
+    levelLesson.textContent = level.lesson;
+    starRule.textContent = difficultySelect.value === "moonless"
+      ? "Moonless vow: finish without a hit to earn the exclusive Moonless Star."
+      : "Garden stars: 3 for no hits and under 2:10 · 2 for one hit · 1 for completing the garden.";
     renderLives();
     pulseButton.disabled = false;
     dashButton.disabled = false;
@@ -215,6 +228,11 @@
   function roundedRect(x, y, width, height, radius) {
     ctx.beginPath();
     ctx.roundRect(x, y, width, height, radius);
+  }
+
+  function visibleInWorld(x, y, margin = 48) {
+    return x >= camera.x - margin && x <= camera.x + viewWidth + margin
+      && y >= camera.y - margin && y <= camera.y + viewHeight + margin;
   }
 
   function drawWorld(time) {
@@ -229,6 +247,7 @@
     ctx.globalAlpha = .35;
     for (let i = 0; i < stars.length; i++) {
       const star = stars[i];
+      if (!visibleInWorld(star.x, star.y)) continue;
       const shine = .45 + .45 * Math.sin(time * .55 + star.phase);
       ctx.fillStyle = `rgba(230, 219, 179, ${shine})`;
       ctx.beginPath();
@@ -290,6 +309,7 @@
     ctx.globalAlpha = 1;
 
     for (const pad of lilyPads) {
+      if (!visibleInWorld(pad.x, pad.y, 24)) continue;
       const drift = Math.sin(time * .5 + pad.phase) * 2;
       ctx.fillStyle = "rgba(115, 157, 122, .65)";
       ctx.beginPath();
@@ -311,6 +331,7 @@
     ctx.fillRect(550, 250, 1100, 1000);
 
     for (const reed of reeds) {
+      if (!visibleInWorld(reed.x, reed.y, reed.height + 12)) continue;
       const sway = Math.sin(time * .8 + reed.phase) * 3;
       ctx.strokeStyle = ["rgba(158, 179, 119, .32)", "rgba(115, 161, 128, .34)", "rgba(194, 174, 116, .25)"][reed.tint];
       ctx.lineWidth = 1.3;
@@ -321,6 +342,7 @@
     }
 
     for (const flower of flowers) {
+      if (!visibleInWorld(flower.x, flower.y, 8)) continue;
       const pulse = .82 + .18 * Math.sin(time * .75 + flower.phase);
       const hue = flower.tint > .8 ? "224, 192, 130" : flower.tint > .53 ? "174, 191, 151" : "180, 178, 198";
       ctx.fillStyle = `rgba(${hue}, ${.53 * pulse})`;
@@ -329,9 +351,15 @@
       ctx.fill();
     }
 
-    for (const shrub of shrubs) drawShrub(shrub);
-    for (const bloom of bloomSpots) drawBloom(bloom, time);
-    for (const tree of trees) drawTree(tree);
+    for (const shrub of shrubs) {
+      if (visibleInWorld(shrub.x, shrub.y, 35 * shrub.scale)) drawShrub(shrub);
+    }
+    for (const bloom of bloomSpots) {
+      if (visibleInWorld(bloom.x, bloom.y, 6)) drawBloom(bloom, time);
+    }
+    for (const tree of trees) {
+      if (visibleInWorld(tree.x, tree.y, 45 * tree.scale)) drawTree(tree);
+    }
     drawShrine(time);
   }
 
@@ -510,6 +538,13 @@
     ctx.save();
     ctx.translate(moth.x, moth.y + bob);
     ctx.rotate(Math.atan2(moth.vy, moth.vx) * .2);
+    if (moth.alertTime > 0) {
+      ctx.strokeStyle = `rgba(255, 151, 105, ${.26 + .24 * Math.sin(time * 7)})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     const alpha = moth.stunned > 0 ? .38 : .94;
     ctx.globalAlpha = alpha;
     if (moth.state === "windup") {
@@ -546,19 +581,28 @@
 
   function drawPlayer(time) {
     const bob = Math.sin(time * 8) * 2;
+    const carryingHot = lights.some(light => light.type === "hot" && light.collected);
     ctx.save();
     ctx.translate(player.x, player.y + bob);
     ctx.rotate(player.facing * .13);
     if (invulnerability > 0 && Math.floor(time * 17) % 2 === 0) ctx.globalAlpha = .38;
 
-    const glowRadius = 62 + Math.min(found, 8) * 5;
+    const glowRadius = (62 + Math.min(found, 8) * 5) * (carryingHot ? 1.32 : 1);
     const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, glowRadius);
-    halo.addColorStop(0, lives <= 1 ? "rgba(255, 145, 135, .3)" : `rgba(255, 220, 140, ${.23 + found * .028})`);
+    halo.addColorStop(0, carryingHot ? "rgba(255, 126, 82, .43)" : lives <= 1 ? "rgba(255, 145, 135, .3)" : `rgba(255, 220, 140, ${.23 + found * .028})`);
     halo.addColorStop(1, "rgba(255, 220, 140, 0)");
     ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    if (carryingHot) {
+      ctx.strokeStyle = `rgba(255, 155, 91, ${.28 + .12 * Math.sin(time * 5)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 24 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     ctx.fillStyle = dashTime > 0 ? "rgba(238, 224, 181, .82)" : "rgba(166, 167, 143, .72)";
     ctx.beginPath();
@@ -667,8 +711,12 @@
     const shakeY = hitShake > 0 ? (Math.random() - .5) * hitShake * 14 : 0;
     ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
     drawWorld(elapsed);
-    for (const light of lights) drawLight(light, elapsed);
-    for (const moth of moths) drawMoth(moth, elapsed);
+    for (const light of lights) {
+      if (visibleInWorld(light.x, light.y, 45)) drawLight(light, elapsed);
+    }
+    for (const moth of moths) {
+      if (visibleInWorld(moth.x, moth.y, 35)) drawMoth(moth, elapsed);
+    }
     drawPulse();
     drawPlayer(elapsed);
     drawMotes(dt);
@@ -721,11 +769,11 @@
   }
 
   function update(dt) {
-    pulseCooldown = Math.max(0, pulseCooldown - dt);
-    dashCooldown = Math.max(0, dashCooldown - dt);
+    abilityCooldown = Math.max(0, abilityCooldown - dt);
     dashTime = Math.max(0, dashTime - dt);
     invulnerability = Math.max(0, invulnerability - dt);
     mothSlowTime = Math.max(0, mothSlowTime - dt);
+    bushRevealTime = Math.max(0, bushRevealTime - dt);
     hitFlash = Math.max(0, hitFlash - dt);
     if (collectFreeze > 0) {
       collectFreeze -= dt;
@@ -737,13 +785,13 @@
       toastTimer -= dt;
       if (toastTimer <= 0) toast.classList.remove("visible");
     }
-    pulseButton.disabled = pulseCooldown > 0 || !started;
-    pulseButton.innerHTML = pulseCooldown > 0
-      ? `✧ <span>RECHARGING ${pulseCooldown.toFixed(1)}s</span><kbd>SPACE</kbd>`
+    pulseButton.disabled = abilityCooldown > 0 || !started;
+    pulseButton.innerHTML = abilityCooldown > 0
+      ? `✧ <span>READY IN ${abilityCooldown.toFixed(1)}s</span><kbd>SPACE</kbd>`
       : `✧ <span>MOON PULSE</span><kbd>SPACE</kbd>`;
-    dashButton.disabled = dashCooldown > 0 || !started;
-    dashButton.innerHTML = dashCooldown > 0
-      ? `➜ <span>DASH ${dashCooldown.toFixed(1)}s</span><kbd>SHIFT</kbd>`
+    dashButton.disabled = abilityCooldown > 0 || !started;
+    dashButton.innerHTML = abilityCooldown > 0
+      ? `➜ <span>READY IN ${abilityCooldown.toFixed(1)}s</span><kbd>SHIFT</kbd>`
       : `➜ <span>DASH</span><kbd>SHIFT</kbd>`;
 
     let ax = 0;
@@ -769,9 +817,28 @@
     const playerInRiver = Math.abs(player.y - riverY(player.x)) < 100;
     const insideBush = shrubs.some(shrub => Math.hypot((player.x - shrub.x) / 1.5, (player.y - shrub.y) / 1.1) < 21 * shrub.scale);
     if (insideBush && !playerHidden) showToast("The tall grass hides your little glow.");
-    playerHidden = insideBush;
+    bushHiddenTime = insideBush ? bushHiddenTime + dt : 0;
+    if (!insideBush) bushRevealTime = 0;
+    if (insideBush && bushHiddenTime >= 3.2 && bushRevealTime <= 0) {
+      bushRevealTime = 2;
+      bushHiddenTime = 0;
+      showToast("The moths flush your hiding place!");
+      playTone(260, .14, "triangle", .04);
+    }
+    playerHidden = insideBush && bushRevealTime <= 0;
     const carryingHot = lights.some(light => light.type === "hot" && light.collected);
     const detectionRadius = 270 + found * 15 + (carryingHot ? 160 : 0);
+    const slowSecond = Math.ceil(mothSlowTime);
+    if (slowSecond !== shownSlowSecond) {
+      shownSlowSecond = slowSecond;
+      objectiveText.textContent = mothSlowTime > 0
+        ? `Moths slowed ${slowSecond}s · ${LEVELS[levelIndex].objective}`
+        : carryingHot
+          ? "HOT LIGHT · moths are drawn to you"
+          : found === lights.length
+            ? "The old lantern is waiting"
+            : LEVELS[levelIndex].objective;
+    }
 
     const speed = 205 * (playerInRiver ? .64 : 1);
     const blend = 1 - Math.exp(-(dashTime > 0 ? 15 : 8) * dt);
@@ -802,7 +869,9 @@
 
     for (const moth of moths) {
       moth.stunned = Math.max(0, moth.stunned - dt);
+      moth.alertTime = Math.max(0, moth.alertTime - dt);
       const distance = Math.hypot(player.x - moth.x, player.y - moth.y);
+      if (carryingHot && distance < detectionRadius) moth.alertTime = Math.max(moth.alertTime, .35);
       moth.wanderTimer -= dt;
       if (moth.stunned > 0) {
         moth.vx *= Math.exp(-3 * dt);
@@ -850,10 +919,25 @@
         let targetX = moth.homeX + Math.cos(elapsed * .55 + moth.phase) * 45;
         let targetY = moth.homeY + Math.sin(elapsed * .62 + moth.phase) * 40;
         const canSee = !playerHidden && distance < detectionRadius;
+        if (canSee) {
+          moth.lastKnownX = player.x;
+          moth.lastKnownY = player.y;
+          moth.searchTime = 4;
+        } else if (moth.searchTime > 0) {
+          moth.searchTime = Math.max(0, moth.searchTime - dt);
+        }
+        const searching = playerHidden && moth.searchTime > 0;
         if (moth.type === "orbiter" && moth.targetLight) {
           targetX = moth.targetLight.x + Math.cos(elapsed * 1.2 + moth.phase) * 58;
           targetY = moth.targetLight.y + Math.sin(elapsed * 1.2 + moth.phase) * 42;
-          if (canSee && distance < 165) beginAttack(moth);
+          if (canSee && distance < 265) {
+            targetX = player.x;
+            targetY = player.y;
+            if (distance < 170) beginAttack(moth);
+          } else if (searching) {
+            targetX = moth.lastKnownX;
+            targetY = moth.lastKnownY;
+          }
         } else if (moth.type === "drifter") {
           if (moth.wanderTimer <= 0 || Math.hypot(moth.x - moth.wanderX, moth.y - moth.wanderY) < 18) {
             moth.wanderX = Math.max(80, Math.min(WORLD.width - 80, moth.homeX + (Math.random() - .5) * 310));
@@ -867,6 +951,9 @@
             const away = Math.atan2(moth.y - player.y, moth.x - player.x);
             targetX = moth.x + Math.cos(away) * 110;
             targetY = moth.y + Math.sin(away) * 110;
+          } else if (searching) {
+            targetX = moth.lastKnownX;
+            targetY = moth.lastKnownY;
           }
         } else if (moth.type === "dasher") {
           if (canSee && distance < 410 && distance > 76) beginAttack(moth);
@@ -874,11 +961,17 @@
             const away = Math.atan2(moth.y - player.y, moth.x - player.x);
             targetX = moth.x + Math.cos(away) * 130;
             targetY = moth.y + Math.sin(away) * 130;
+          } else if (searching) {
+            targetX = moth.lastKnownX;
+            targetY = moth.lastKnownY;
           }
         } else if (canSee) {
           targetX = player.x;
           targetY = player.y;
           if (distance < 164) beginAttack(moth);
+        } else if (searching) {
+          targetX = moth.lastKnownX;
+          targetY = moth.lastKnownY;
         }
         if (moth.state === "idle") {
           const angle = Math.atan2(targetY - moth.y, targetX - moth.x);
@@ -892,7 +985,10 @@
       moth.x = Math.max(20, Math.min(WORLD.width - 20, moth.x));
       moth.y = Math.max(20, Math.min(WORLD.height - 20, moth.y));
       const contact = Math.hypot(player.x - moth.x, player.y - moth.y) < 25;
-      if (contact && moth.state === "dash" && invulnerability <= 0 && dashTime <= 0 && !playerHidden) takeHit(moth);
+      if (contact && moth.state === "dash" && invulnerability <= 0 && !playerHidden) {
+        takeHit(moth);
+        if (finished) return;
+      }
     }
 
     if (found === lights.length && Math.hypot(player.x - shrine.x, player.y - shrine.y) < 52) finishGame();
@@ -902,7 +998,9 @@
     if (moth.state !== "idle") return;
     moth.state = "windup";
     moth.stateTime = moth.type === "dasher" ? .82 : .62;
-    const aim = Math.atan2(player.y - moth.y, player.x - moth.x);
+    const targetX = playerHidden ? moth.lastKnownX : player.x;
+    const targetY = playerHidden ? moth.lastKnownY : player.y;
+    const aim = Math.atan2(targetY - moth.y, targetX - moth.x);
     moth.attackX = Math.cos(aim);
     moth.attackY = Math.sin(aim);
   }
@@ -935,9 +1033,13 @@
       }
     } else if (light.type === "blue") {
       mothSlowTime = 5;
-      showToast("Blue light slows the moths for a while.");
+      shownSlowSecond = -1;
+      showToast("Blue light slows moths for 5 seconds. Your abilities recharge normally.");
     } else if (light.type === "hot") {
-      showToast("Hot light carried: moths can sense you from farther away.");
+      shownSlowSecond = -1;
+      showToast("HOT LIGHT! Your orange glow draws moths from farther away.");
+      playTone(760, .18, "sawtooth", .04);
+      playTone(520, .2, "triangle", .035);
     } else {
       showToast(streak > 1 ? `Light streak x${streak} · +${bonus}` : `A light found its way back · +${bonus}`);
     }
@@ -951,6 +1053,7 @@
   function takeHit(moth) {
     lives--;
     levelHitCount++;
+    hitSources[moth.type] = (hitSources[moth.type] || 0) + 1;
     hitFlash = .22;
     invulnerability = 1.2;
     hitShake = 1;
@@ -973,9 +1076,9 @@
   }
 
   function activatePulse() {
-    if (!started || paused || finished || pulseCooldown > 0) return;
+    if (!started || paused || finished || abilityCooldown > 0) return;
     pulseTime = .65;
-    pulseCooldown = 5;
+    abilityCooldown = 5;
     playTone(350, .2, "sine", .045);
     for (const light of lights) {
       if (!light.collected && Math.hypot(player.x - light.x, player.y - light.y) < 430) light.revealed = 5;
@@ -994,7 +1097,7 @@
   }
 
   function activateDash() {
-    if (!started || paused || finished || dashCooldown > 0) return;
+    if (!started || paused || finished || abilityCooldown > 0) return;
     let dx = player.vx;
     let dy = player.vy;
     if (Math.hypot(dx, dy) < 15) {
@@ -1006,7 +1109,7 @@
     player.dashY = dy / length;
     player.facing = Math.atan2(player.dashY, player.dashX);
     dashTime = .22;
-    dashCooldown = 1.7;
+    abilityCooldown = 6;
     playTone(410, .12, "sawtooth", .025);
     burst(player.x, player.y, "#e8d9a7", 5);
   }
@@ -1051,6 +1154,34 @@
     sfxLevel = Number(sfxVolume.value) / 100;
     if (musicGain && audioContext) {
       musicGain.gain.setTargetAtTime(soundOn ? ambienceLevel * .035 : 0, audioContext.currentTime, .12);
+    }
+    saveSettings();
+  }
+
+  function saveSettings() {
+    try {
+      localStorage.setItem("mothlight-settings", JSON.stringify({
+        difficulty: difficultySelect.value,
+        music: musicVolume.value,
+        sfx: sfxVolume.value,
+        sound: soundOn
+      }));
+    } catch (error) {
+      console.warn("Could not save game settings.", error);
+    }
+  }
+
+  function loadSettings() {
+    try {
+      const settings = JSON.parse(localStorage.getItem("mothlight-settings") || "{}");
+      if (["cozy", "normal", "moonless"].includes(settings.difficulty)) difficultySelect.value = settings.difficulty;
+      if (Number.isFinite(Number(settings.music))) musicVolume.value = String(Math.max(0, Math.min(100, Number(settings.music))));
+      if (Number.isFinite(Number(settings.sfx))) sfxVolume.value = String(Math.max(0, Math.min(100, Number(settings.sfx))));
+      if (typeof settings.sound === "boolean") soundOn = settings.sound;
+      bestTimes = JSON.parse(localStorage.getItem("mothlight-best-times") || "{}");
+      if (!bestTimes || typeof bestTimes !== "object" || Array.isArray(bestTimes)) bestTimes = {};
+    } catch (error) {
+      console.warn("Could not load saved game settings.", error);
     }
   }
 
@@ -1141,9 +1272,22 @@
     overlayTitle.textContent = won
       ? isFinalLevel ? "Home, at last" : `${LEVELS[levelIndex].name} complete`
       : "The night was long";
+    const moonlessReward = won && difficultySelect.value === "moonless" && levelHitCount === 0
+      ? "<br>MOONLESS VOW · EXCLUSIVE STAR"
+      : "";
+    const recap = Object.entries(hitSources)
+      .filter(([, hits]) => hits > 0)
+      .map(([type, hits]) => `${hits} ${type}${hits === 1 ? "" : "s"}`)
+      .join(", ") || "No moth hits";
     overlayCopy.innerHTML = won
-      ? `${isFinalLevel ? "You brought every little light home." : "The lantern keeps your place for next time."}<br>${"★".repeat(starsEarned)}${"☆".repeat(3 - starsEarned)} · ${formatTime(levelElapsed)} · ${score.toLocaleString()} stardust<br>Best ${formatTime(bestTimes[String(levelIndex)] || levelElapsed)}`
-      : `The garden is still here, and so are its lights.<br>Take a breath. Your lantern is a checkpoint.`;
+      ? `${isFinalLevel ? "You brought every little light home." : "The lantern keeps your place for next time."}<br>${"★".repeat(starsEarned)}${"☆".repeat(3 - starsEarned)} · ${formatTime(levelElapsed)} · ${score.toLocaleString()} stardust<br>Best ${formatTime(bestTimes[String(levelIndex)] || levelElapsed)}${moonlessReward}`
+      : `The garden is still here, and so are its lights.<br>Take a breath. Your lantern is a checkpoint.<br>Hits: ${recap}.`;
+    levelLesson.textContent = won ? "" : LEVELS[levelIndex].lesson;
+    starRule.textContent = won
+      ? "The lantern will remember your best time in this browser."
+      : difficultySelect.value === "moonless"
+        ? "Moonless vow: finish without a hit to earn the exclusive Moonless Star."
+        : "Garden stars: 3 for no hits and under 2:10 · 2 for one hit · 1 for completing the garden.";
     startButton.querySelector("span:first-child").textContent = won
       ? isFinalLevel ? "Wander again" : "Next garden"
       : "Try this garden again";
@@ -1236,6 +1380,7 @@
   dashButton.addEventListener("click", activateDash);
   restartButton.addEventListener("click", resetGame);
   difficultySelect.addEventListener("change", () => {
+    saveSettings();
     if (!started) initializeLevel(levelIndex);
     else if (paused) showToast("Mood changes apply when you restart this garden.");
   });
@@ -1249,6 +1394,7 @@
     if (soundOn) playTone(520, .1, "sine", .035);
   });
 
+  loadSettings();
   seedWorld();
   initializeLevel(0);
   overlay.classList.add("settings-visible");

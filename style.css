@@ -118,6 +118,8 @@ h1 { margin: 0; color: #f7f0db; font: 500 clamp(68px, 10vw, 94px)/.96 "Fraunces"
 h1 span { color: #f1ce84; font-style: italic; }
 .subtitle { margin: 10px 0 23px; color: #e4d8b6; font: italic 16px "Fraunces", Georgia, serif; letter-spacing: .035em; }
 .story { margin: 0 auto 25px; color: #d0d6cc; font-size: 13px; line-height: 1.85; }
+.level-lesson { min-height: 30px; margin: 0 auto 8px; color: #f0d99f; font-size: 11px; line-height: 1.5; }
+.star-rule { margin: 11px auto 0; color: #e2e6dc; font: 9px/1.55 var(--mono); }
 .settings { display: none; width: min(310px, 100%); margin: -8px auto 18px; padding: 11px 13px; border: 1px solid rgba(239, 229, 200, .17); border-radius: 4px; background: rgba(9, 20, 27, .48); }
 .settings-visible .settings { display: grid; gap: 9px; }
 .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #ece9db; font: 10px var(--mono); text-align: left; }
@@ -171,6 +173,8 @@ h1 span { color: #f1ce84; font-style: italic; }
   .title-ornament { margin-top: 11px; }
   .subtitle { margin-bottom: 15px; }
   .story { margin-bottom: 16px; }
+  .level-lesson { font-size: 10px; }
+  .star-rule { font-size: 8px; }
   .controls { margin-top: 15px; }
 }
 
