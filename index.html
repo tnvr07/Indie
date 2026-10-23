@@ -4,19 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#09131e">
-    <meta name="description" content="Gather the wandering lights and guide them home in a tiny moonlit-garden adventure.">
-    <title>Mothlight — A Little Night Adventure</title>
+    <meta name="description" content="Carry the last light through a garden that remembers the dark.">
+    <title>MOTHLIGHT — A Nocturne in Four Parts</title>
     <link rel="stylesheet" href="style.css">
     <script src="game.js" defer></script>
   </head>
   <body>
     <main class="game-shell" aria-label="Mothlight game">
-      <canvas id="world" aria-label="A moonlit garden. Use WASD or arrow keys to explore, collect lights, and avoid moths."></canvas>
+      <canvas id="world" aria-label="A dark garden. Use WASD or arrow keys to carry light, find the lantern, and evade moths."></canvas>
 
       <header class="topbar">
         <a class="wordmark" href="#" aria-label="Mothlight home">
           <span class="wordmark-mark" aria-hidden="true">✳</span>
-          <span>MOTH<span class="wordmark-light">LIGHT</span><small>A LITTLE NIGHT ADVENTURE</small></span>
+          <span>MOTH<span class="wordmark-light">LIGHT</span><small>A NOCTURNE IN FOUR PARTS</small></span>
         </a>
         <div class="top-actions">
           <button class="icon-button" id="sound-button" type="button" aria-label="Turn sound off" title="Toggle sound">♫</button>
@@ -31,8 +31,8 @@
           <span class="progress-track"><span id="progress-fill"></span></span>
         </div>
         <div class="hud-card life-card">
-          <span class="hud-eyebrow">LITTLE LIVES</span>
-          <span id="lives" class="hearts" aria-label="3 lives">♥ ♥ ♥</span>
+          <span class="hud-eyebrow">VITAL GLOW</span>
+          <span id="lives" class="vitality" aria-label="3 light remaining">✦ ✦ ✦</span>
         </div>
       </section>
 
@@ -45,17 +45,17 @@
 
       <section class="overlay" id="overlay" aria-labelledby="overlay-title">
         <div class="overlay-card">
-          <div class="eyebrow"><span class="eyebrow-line"></span> THE GARDEN AFTER DARK <span class="eyebrow-line"></span></div>
+          <div class="eyebrow"><span class="eyebrow-line"></span> FOUR GARDENS · ONE LAST LIGHT <span class="eyebrow-line"></span></div>
           <div class="title-ornament" aria-hidden="true"><span></span>✳<span></span></div>
-          <h1 id="overlay-title">Moth<span>light</span></h1>
-          <p class="subtitle">A little night adventure</p>
+          <h1 id="overlay-title">MOTH<span>LIGHT</span></h1>
+          <p class="subtitle">A nocturne in four parts</p>
           <p class="level-lesson" id="level-lesson"></p>
-          <p class="story" id="overlay-copy">The moon has misplaced its little lights.<br>Wander the garden, gather them up, and<br>bring their glow back to the old lantern.</p>
-          <p class="star-rule" id="star-rule">Garden stars: 3 for no hits and under 2:10 · 2 for one hit · 1 for completing the garden.</p>
+          <p class="story" id="overlay-copy">The garden went dark the night the lamps were taken.<br>Carry what remains. The wings have learned your name.</p>
+          <p class="star-rule" id="star-rule">Three marks: no wounds, under 2:10. Each hit scatters a light.</p>
           <div class="settings" id="settings">
             <label class="setting-row">Night mood
               <select id="difficulty">
-                <option value="cozy">Cozy</option>
+                <option value="cozy">Quiet</option>
                 <option value="normal" selected>Wanderer</option>
                 <option value="moonless">Moonless</option>
               </select>
@@ -64,7 +64,12 @@
             <label class="setting-row">Sound effects <input id="sfx-volume" type="range" min="0" max="100" value="65"></label>
             <button class="secondary-button" id="restart-button" type="button">Restart this garden</button>
           </div>
-          <button class="start-button" id="start-button" type="button"><span>Begin wandering</span><span aria-hidden="true">↗</span></button>
+          <div class="upgrade-picker" id="upgrade-picker" aria-label="Choose an upgrade">
+            <button class="upgrade-choice" type="button" data-upgrade="glow"><strong>Wider signal</strong><span>See farther. They will too.</span></button>
+            <button class="upgrade-choice" type="button" data-upgrade="pulse"><strong>Longer pulse</strong><span>Hold the dark back for longer.</span></button>
+            <button class="upgrade-choice" type="button" data-upgrade="dash"><strong>Longer stride</strong><span>Travel farther between breaths.</span></button>
+          </div>
+          <button class="start-button" id="start-button" type="button"><span>Enter the garden</span><span aria-hidden="true">↗</span></button>
           <div class="controls">
             <span><kbd>WASD</kbd> <kbd>↑↓←→</kbd> wander</span>
             <i aria-hidden="true">·</i>
@@ -76,7 +81,7 @@
         </div>
       </section>
 
-      <footer class="footer-note"><span>TAKE YOUR TIME</span><span class="footer-sparkle">✳</span><span>THE NIGHT IS YOURS</span></footer>
+      <footer class="footer-note"><span>THE DARK KEEPS WHAT YOU DROP</span><span class="footer-sparkle">·</span><span>KEEP THE LIGHT MOVING</span></footer>
     </main>
   </body>
 </html>
