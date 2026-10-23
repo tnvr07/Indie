@@ -26,7 +26,7 @@
 
       <section class="hud" aria-label="Game progress">
         <div class="hud-card light-counter">
-          <span class="hud-eyebrow">LIGHTS FOUND</span>
+          <span class="hud-eyebrow" id="level-label">LEVEL 1 · THE QUIET GARDEN</span>
           <span class="counter-line"><span class="counter-icon" aria-hidden="true">✦</span><strong id="light-count">0</strong><span class="counter-divider">/</span><span id="light-total">10</span></span>
           <span class="progress-track"><span id="progress-fill"></span></span>
         </div>
@@ -38,7 +38,10 @@
 
       <div class="objective" id="objective"><span class="objective-dot"></span><span id="objective-text">Find the scattered lights</span></div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
-      <button class="pulse-button" id="pulse-button" type="button" aria-label="Use a moon pulse">✧ <span>MOON PULSE</span><kbd>SPACE</kbd></button>
+      <div class="action-buttons">
+        <button class="pulse-button" id="pulse-button" type="button" aria-label="Use a moon pulse">✧ <span>MOON PULSE</span><kbd>SPACE</kbd></button>
+        <button class="dash-button" id="dash-button" type="button" aria-label="Dash">➜ <span>DASH</span><kbd>SHIFT</kbd></button>
+      </div>
 
       <section class="overlay" id="overlay" aria-labelledby="overlay-title">
         <div class="overlay-card">
@@ -47,11 +50,25 @@
           <h1 id="overlay-title">Moth<span>light</span></h1>
           <p class="subtitle">A little night adventure</p>
           <p class="story" id="overlay-copy">The moon has misplaced its little lights.<br>Wander the garden, gather them up, and<br>bring their glow back to the old lantern.</p>
+          <div class="settings" id="settings">
+            <label class="setting-row">Night mood
+              <select id="difficulty">
+                <option value="cozy">Cozy</option>
+                <option value="normal" selected>Wanderer</option>
+                <option value="moonless">Moonless</option>
+              </select>
+            </label>
+            <label class="setting-row">Night music <input id="music-volume" type="range" min="0" max="100" value="18"></label>
+            <label class="setting-row">Sound effects <input id="sfx-volume" type="range" min="0" max="100" value="65"></label>
+            <button class="secondary-button" id="restart-button" type="button">Restart this garden</button>
+          </div>
           <button class="start-button" id="start-button" type="button"><span>Begin wandering</span><span aria-hidden="true">↗</span></button>
           <div class="controls">
             <span><kbd>WASD</kbd> <kbd>↑↓←→</kbd> wander</span>
             <i aria-hidden="true">·</i>
-            <span><kbd>SPACE</kbd> shoo moths</span>
+            <span><kbd>SHIFT</kbd> dash</span>
+            <i aria-hidden="true">·</i>
+            <span><kbd>SPACE</kbd> pulse</span>
           </div>
           <p class="touch-note">On a phone? Tap the garden to wander.</p>
         </div>

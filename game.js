@@ -8,6 +8,11 @@
   const pauseButton = document.querySelector("#pause-button");
   const soundButton = document.querySelector("#sound-button");
   const pulseButton = document.querySelector("#pulse-button");
+  const dashButton = document.querySelector("#dash-button");
+  const restartButton = document.querySelector("#restart-button");
+  const difficultySelect = document.querySelector("#difficulty");
+  const musicVolume = document.querySelector("#music-volume");
+  const sfxVolume = document.querySelector("#sfx-volume");
   const countLabel = document.querySelector("#light-count");
   const totalLabel = document.querySelector("#light-total");
   const progressFill = document.querySelector("#progress-fill");
@@ -16,9 +21,15 @@
   const toast = document.querySelector("#toast");
   const overlayTitle = document.querySelector("#overlay-title");
   const overlayCopy = document.querySelector("#overlay-copy");
+  const levelLabel = document.querySelector("#level-label");
 
   const WORLD = { width: 2200, height: 1500 };
-  const TOTAL_LIGHTS = 10;
+  const LEVELS = [
+    { name: "The Quiet Garden", objective: "Find the scattered lights", lights: [[1000, 700, "gold"], [1250, 560, "gold"], [780, 1000, "gold"], [1400, 1050, "gold"]], moths: [["drifter", 600, 480]] },
+    { name: "The Long Way Home", objective: "Follow the lantern trail", lights: [[370, 750, "gold"], [1440, 300, "gold"], [1780, 470, "blue"], [1610, 920, "gold"], [1110, 510, "gold"]], moths: [["drifter", 530, 470], ["chaser", 1460, 650]] },
+    { name: "River of Dreams", objective: "Cross the river for the lights", lights: [[370, 750, "gold"], [740, 1030, "gold"], [1170, 1080, "blue"], [1610, 920, "gold"], [1900, 1190, "green"], [1440, 300, "gold"]], moths: [["drifter", 500, 480], ["chaser", 1490, 680], ["drifter", 1840, 900]] },
+    { name: "The Mothlight Nest", objective: "Break the nest's moonlit guard", lights: [[460, 330, "gold"], [790, 245, "blue"], [1440, 300, "gold"], [1780, 470, "hot"], [370, 750, "gold"], [1610, 920, "green"], [1900, 1190, "gold"]], moths: [["drifter", 600, 540], ["chaser", 1510, 680], ["dasher", 1020, 1190], ["orbiter", 1780, 470]] }
+  ];
   const keys = new Set();
   const lights = [];
   const moths = [];
@@ -33,6 +44,7 @@
   const pointer = { active: false, x: 0, y: 0 };
   const shrine = { x: 1100, y: 170 };
   const player = { x: 1100, y: 790, vx: 0, vy: 0, radius: 15, facing: 0 };
+  const FIXED_STEP = 1 / 60;
 
   let viewWidth = innerWidth;
   let viewHeight = innerHeight;
@@ -44,11 +56,32 @@
   let audioContext;
   let lives = 3;
   let found = 0;
+  let levelIndex = 0;
+  let levelElapsed = 0;
+  let levelHitCount = 0;
+  let streak = 0;
+  let score = 0;
+  let checkpointScore = 0;
+  let lastCollectAt = 0;
+  let dashCooldown = 0;
+  let dashTime = 0;
+  let invulnerability = 0;
+  let hitShake = 0;
+  let collectFreeze = 0;
+  let playerHidden = false;
+  let mothSlowTime = 0;
+  let resultWon = false;
+  let musicGain;
+  let ambienceOscillators = [];
+  let sfxLevel = .65;
+  let ambienceLevel = .18;
+  let bestTimes = {};
   let pulseTime = 0;
   let pulseCooldown = 0;
   let hitFlash = 0;
   let elapsed = 0;
   let lastFrame = 0;
+  let accumulator = 0;
   let toastTimer = 0;
   let camera = { x: 0, y: 0 };
   let rngSeed = 62831;
@@ -70,19 +103,7 @@
   }
 
   function seedWorld() {
-    const placements = [
-      [460, 330], [790, 245], [1440, 300], [1780, 470], [370, 750],
-      [740, 1030], [1170, 1080], [1610, 920], [1900, 1190], [1110, 510]
-    ];
-    placements.forEach(([x, y], index) => lights.push({
-      x, y, phase: random() * Math.PI * 2, collected: false, hue: index % 4
-    }));
-
     const mothSpawns = [[600, 540], [1510, 680], [1020, 1190], [1850, 720]];
-    mothSpawns.forEach(([x, y], index) => moths.push({
-      x, y, vx: 0, vy: 0, homeX: x, homeY: y, phase: random() * 8,
-      speed: 48 + index * 5, stunned: 0, turn: random() * 6
-    }));
 
     [
       [90, 90, 1.3], [350, 110, .9], [710, 75, 1.2], [1110, 90, 1.35], [1510, 95, .95], [2050, 130, 1.35],
@@ -101,7 +122,8 @@
       const shoreY = 700 + 135 * Math.sin((x - 200) / 385);
       const side = random() < .5 ? -1 : 1;
       const y = shoreY + side * (132 + random() * 260);
-      const tooClose = [...lights, { x: player.x, y: player.y }, shrine, ...mothSpawns.map(([mx, my]) => ({ x: mx, y: my }))]
+      const levelLights = LEVELS.flatMap(level => level.lights.map(([lightX, lightY]) => ({ x: lightX, y: lightY })));
+      const tooClose = [...levelLights, { x: player.x, y: player.y }, shrine, ...mothSpawns.map(([mx, my]) => ({ x: mx, y: my }))]
         .some(point => Math.hypot(point.x - x, point.y - y) < 105);
       if (!tooClose && y > 55 && y < WORLD.height - 55) {
         shrubs.push({ x, y, scale: .7 + random() * .85, tint: random() });
@@ -133,6 +155,61 @@
     for (let i = 0; i < 145; i++) {
       stars.push({ x: random() * WORLD.width, y: random() * WORLD.height, size: .5 + random() * 1.5, phase: random() * 7 });
     }
+  }
+
+  function initializeLevel(index) {
+    levelIndex = Math.max(0, Math.min(LEVELS.length - 1, index));
+    const level = LEVELS[levelIndex];
+    lights.length = 0;
+    moths.length = 0;
+    const palette = { gold: "255, 221, 146", green: "167, 230, 185", blue: "152, 196, 255", hot: "255, 154, 100" };
+    level.lights.forEach(([x, y, type], itemIndex) => lights.push({
+      x, y, type, color: palette[type], phase: random() * Math.PI * 2,
+      collected: false, revealed: 0, itemIndex
+    }));
+    const speedScale = difficultySelect.value === "cozy" ? .76 : difficultySelect.value === "moonless" ? 1.26 : 1;
+    level.moths.forEach(([type, x, y], index) => {
+      const targetLight = type === "orbiter"
+        ? lights.reduce((nearest, light) => Math.hypot(light.x - x, light.y - y) < Math.hypot(nearest.x - x, nearest.y - y) ? light : nearest, lights[0])
+        : null;
+      moths.push({
+        type, x, y, vx: 0, vy: 0, homeX: x, homeY: y, phase: random() * 8,
+        speed: (type === "dasher" ? 78 : type === "chaser" ? 49 : type === "orbiter" ? 60 : 52) * speedScale,
+        stunned: 0, targetLight, wanderX: x, wanderY: y, wanderTimer: 0,
+        state: "idle", stateTime: 0, attackX: 0, attackY: 0, turn: random() * 6 + index
+      });
+    });
+    player.x = 1100;
+    player.y = 790;
+    player.vx = 0;
+    player.vy = 0;
+    found = 0;
+    streak = 0;
+    lastCollectAt = 0;
+    levelElapsed = 0;
+    levelHitCount = 0;
+    lives = difficultySelect.value === "cozy" ? 5 : difficultySelect.value === "moonless" ? 1 : 3;
+    pulseCooldown = 0;
+    dashCooldown = 0;
+    dashTime = 0;
+    invulnerability = 0;
+    hitFlash = 0;
+    hitShake = 0;
+    collectFreeze = 0;
+    mothSlowTime = 0;
+    playerHidden = false;
+    resultWon = false;
+    keys.clear();
+    pointer.active = false;
+    finished = false;
+    countLabel.textContent = "0";
+    totalLabel.textContent = lights.length;
+    progressFill.style.width = "0";
+    levelLabel.textContent = `LEVEL ${levelIndex + 1} · ${level.name.toUpperCase()}`;
+    objectiveText.textContent = level.objective;
+    renderLives();
+    pulseButton.disabled = false;
+    dashButton.disabled = false;
   }
 
   function roundedRect(x, y, width, height, radius) {
@@ -334,7 +411,7 @@
   }
 
   function drawShrine(time) {
-    const active = found === TOTAL_LIGHTS;
+    const active = found === lights.length;
     const glow = ctx.createRadialGradient(shrine.x, shrine.y - 8, 5, shrine.x, shrine.y - 8, active ? 140 : 70);
     glow.addColorStop(0, active ? "rgba(255, 222, 142, .4)" : "rgba(240, 205, 133, .2)");
     glow.addColorStop(1, "rgba(240, 205, 133, 0)");
@@ -376,10 +453,13 @@
 
   function drawLight(light, time) {
     if (light.collected) return;
+    const distance = Math.hypot(player.x - light.x, player.y - light.y);
+    const glowRange = 230 + Math.min(found, 8) * 25;
+    if (distance > glowRange && light.revealed <= 0) return;
     const bob = Math.sin(time * 1.8 + light.phase) * 5;
     const x = light.x;
     const y = light.y + bob;
-    const color = ["255, 221, 146", "202, 232, 192", "217, 212, 249", "246, 191, 150"][light.hue];
+    const color = light.color;
     const aura = ctx.createRadialGradient(x, y, 1, x, y, 38);
     aura.addColorStop(0, `rgba(${color}, .3)`);
     aura.addColorStop(1, `rgba(${color}, 0)`);
@@ -393,10 +473,29 @@
     ctx.fill();
     ctx.fillStyle = `rgba(${color}, .95)`;
     ctx.shadowColor = `rgb(${color})`;
-    ctx.shadowBlur = 15;
-    ctx.beginPath();
-    ctx.arc(x, y, 4 + Math.sin(time * 2.2 + light.phase) * .7, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.shadowBlur = light.type === "hot" ? 24 : 15;
+    if (light.type === "green") {
+      ctx.fillRect(x - 4, y - 4, 8, 8);
+    } else if (light.type === "blue") {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 5, y);
+      ctx.lineTo(x, y + 5);
+      ctx.lineTo(x - 5, y);
+      ctx.closePath();
+      ctx.fill();
+    } else if (light.type === "hot") {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 6);
+      ctx.lineTo(x + 5, y + 4);
+      ctx.lineTo(x - 5, y + 4);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, 4 + Math.sin(time * 2.2 + light.phase) * .7, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.shadowBlur = 0;
     ctx.fillStyle = "rgba(255, 249, 219, .8)";
     ctx.beginPath();
@@ -405,14 +504,27 @@
   }
 
   function drawMoth(moth, time) {
-    const flap = Math.sin(time * 13 + moth.phase) * .38;
+    const flapSpeed = moth.state === "windup" || moth.state === "dash" ? 28 : 13;
+    const flap = Math.sin(time * flapSpeed + moth.phase) * (moth.state === "windup" ? .75 : .38);
     const bob = Math.sin(time * 3 + moth.phase) * 3;
     ctx.save();
     ctx.translate(moth.x, moth.y + bob);
     ctx.rotate(Math.atan2(moth.vy, moth.vx) * .2);
     const alpha = moth.stunned > 0 ? .38 : .94;
     ctx.globalAlpha = alpha;
-    const wingColor = moth.stunned > 0 ? "rgba(187, 195, 177, .45)" : "rgba(184, 169, 202, .83)";
+    if (moth.state === "windup") {
+      const warning = .45 + .4 * Math.sin(time * 23);
+      ctx.strokeStyle = `rgba(255, 166, 125, ${warning})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 17 + warning * 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const wingColor = moth.stunned > 0 ? "rgba(187, 195, 177, .45)"
+      : moth.type === "dasher" ? "rgba(239, 154, 126, .88)"
+        : moth.type === "chaser" ? "rgba(191, 177, 217, .88)"
+          : moth.type === "orbiter" ? "rgba(226, 199, 135, .9)"
+            : "rgba(165, 201, 187, .86)";
     ctx.fillStyle = wingColor;
     ctx.beginPath();
     ctx.ellipse(-5, -3, 10, 6 + flap * 4, -.4, 0, Math.PI * 2);
@@ -437,14 +549,21 @@
     ctx.save();
     ctx.translate(player.x, player.y + bob);
     ctx.rotate(player.facing * .13);
-    if (hitFlash > 0 && Math.floor(time * 15) % 2 === 0) ctx.globalAlpha = .38;
+    if (invulnerability > 0 && Math.floor(time * 17) % 2 === 0) ctx.globalAlpha = .38;
 
-    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, 62);
-    halo.addColorStop(0, "rgba(255, 220, 140, .23)");
+    const glowRadius = 62 + Math.min(found, 8) * 5;
+    const halo = ctx.createRadialGradient(0, 0, 2, 0, 0, glowRadius);
+    halo.addColorStop(0, lives <= 1 ? "rgba(255, 145, 135, .3)" : `rgba(255, 220, 140, ${.23 + found * .028})`);
     halo.addColorStop(1, "rgba(255, 220, 140, 0)");
     ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(0, 0, 62, 0, Math.PI * 2);
+    ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = dashTime > 0 ? "rgba(238, 224, 181, .82)" : "rgba(166, 167, 143, .72)";
+    ctx.beginPath();
+    ctx.ellipse(-11, 2, 10 + (dashTime > 0 ? 4 : 0), 5, -.45, 0, Math.PI * 2);
+    ctx.ellipse(11, 2, 10 + (dashTime > 0 ? 4 : 0), 5, .45, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = "rgba(9, 18, 21, .32)";
@@ -472,8 +591,8 @@
     ctx.arc(-3, -7, 1.3, 0, Math.PI * 2);
     ctx.arc(1, -7, 1.3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#e9bb75";
-    ctx.shadowColor = "#f7d283";
+    ctx.fillStyle = lives <= 1 ? "#f19084" : "#e9bb75";
+    ctx.shadowColor = lives <= 1 ? "#f18a7e" : "#f7d283";
     ctx.shadowBlur = 15;
     ctx.beginPath();
     ctx.arc(10, -4, 3.4, 0, Math.PI * 2);
@@ -525,9 +644,18 @@
   }
 
   function frame(timestamp) {
-    const dt = Math.min((timestamp - lastFrame) / 1000 || 0, .035);
+    const dt = Math.min((timestamp - lastFrame) / 1000 || 0, .1);
     lastFrame = timestamp;
-    if (started && !paused && !finished) update(dt);
+    if (started && !paused && !finished) {
+      accumulator += dt;
+      let steps = 0;
+      while (accumulator >= FIXED_STEP && steps < 6) {
+        update(FIXED_STEP);
+        accumulator -= FIXED_STEP;
+        steps++;
+      }
+      if (steps === 6) accumulator = 0;
+    }
     elapsed += dt;
 
     camera.x = Math.max(0, Math.min(WORLD.width - viewWidth, player.x - viewWidth / 2));
@@ -535,7 +663,9 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, viewWidth, viewHeight);
     ctx.save();
-    ctx.translate(-camera.x, -camera.y);
+    const shakeX = hitShake > 0 ? (Math.random() - .5) * hitShake * 14 : 0;
+    const shakeY = hitShake > 0 ? (Math.random() - .5) * hitShake * 14 : 0;
+    ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
     drawWorld(elapsed);
     for (const light of lights) drawLight(light, elapsed);
     for (const moth of moths) drawMoth(moth, elapsed);
@@ -544,25 +674,77 @@
     drawMotes(dt);
     ctx.restore();
 
+    drawCompass();
+    if (lives <= 1) {
+      const vignette = ctx.createRadialGradient(viewWidth / 2, viewHeight / 2, Math.min(viewWidth, viewHeight) * .3, viewWidth / 2, viewHeight / 2, Math.max(viewWidth, viewHeight) * .72);
+      vignette.addColorStop(0, "rgba(144, 58, 68, 0)");
+      vignette.addColorStop(1, `rgba(144, 58, 68, ${.22 + .06 * Math.sin(elapsed * 2)})`);
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, viewWidth, viewHeight);
+    }
     if (hitFlash > 0) {
       ctx.fillStyle = `rgba(255, 190, 160, ${Math.min(.12, hitFlash * .08)})`;
       ctx.fillRect(0, 0, viewWidth, viewHeight);
     }
+    hitShake = Math.max(0, hitShake - dt * 3.4);
     requestAnimationFrame(frame);
+  }
+
+  function drawCompass() {
+    if (found < lights.length - 2 && levelElapsed - lastCollectAt < 30) return;
+    const target = lights.filter(light => !light.collected)
+      .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0];
+    if (!target) return;
+    const x = target.x - camera.x;
+    const y = target.y - camera.y;
+    if (x >= 18 && x <= viewWidth - 18 && y >= 18 && y <= viewHeight - 18) return;
+    const angle = Math.atan2(y - viewHeight / 2, x - viewWidth / 2);
+    const padding = 27;
+    const distanceToEdge = Math.min(
+      Math.abs((viewWidth / 2 - padding) / Math.cos(angle)),
+      Math.abs((viewHeight / 2 - padding) / Math.sin(angle))
+    );
+    const arrowX = viewWidth / 2 + Math.cos(angle) * distanceToEdge;
+    const arrowY = viewHeight / 2 + Math.sin(angle) * distanceToEdge;
+    ctx.save();
+    ctx.translate(arrowX, arrowY);
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(255, 225, 164, .82)";
+    ctx.beginPath();
+    ctx.moveTo(9, 0);
+    ctx.lineTo(-6, -5);
+    ctx.lineTo(-3, 0);
+    ctx.lineTo(-6, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   function update(dt) {
     pulseCooldown = Math.max(0, pulseCooldown - dt);
-    pulseTime = Math.max(0, pulseTime - dt);
+    dashCooldown = Math.max(0, dashCooldown - dt);
+    dashTime = Math.max(0, dashTime - dt);
+    invulnerability = Math.max(0, invulnerability - dt);
+    mothSlowTime = Math.max(0, mothSlowTime - dt);
     hitFlash = Math.max(0, hitFlash - dt);
+    if (collectFreeze > 0) {
+      collectFreeze -= dt;
+      return;
+    }
+    levelElapsed += dt;
+    pulseTime = Math.max(0, pulseTime - dt);
     if (toastTimer > 0) {
       toastTimer -= dt;
       if (toastTimer <= 0) toast.classList.remove("visible");
     }
-    pulseButton.disabled = pulseCooldown > 0;
+    pulseButton.disabled = pulseCooldown > 0 || !started;
     pulseButton.innerHTML = pulseCooldown > 0
       ? `✧ <span>RECHARGING ${pulseCooldown.toFixed(1)}s</span><kbd>SPACE</kbd>`
       : `✧ <span>MOON PULSE</span><kbd>SPACE</kbd>`;
+    dashButton.disabled = dashCooldown > 0 || !started;
+    dashButton.innerHTML = dashCooldown > 0
+      ? `➜ <span>DASH ${dashCooldown.toFixed(1)}s</span><kbd>SHIFT</kbd>`
+      : `➜ <span>DASH</span><kbd>SHIFT</kbd>`;
 
     let ax = 0;
     let ay = 0;
@@ -581,98 +763,252 @@
     if (magnitude > 0) {
       ax /= magnitude;
       ay /= magnitude;
-      player.facing = ax;
+      player.facing = Math.atan2(ay, ax);
     }
-    const speed = 205;
-    const blend = 1 - Math.exp(-8 * dt);
-    player.vx += (ax * speed - player.vx) * blend;
-    player.vy += (ay * speed - player.vy) * blend;
-    if (magnitude === 0) {
-      player.vx *= Math.exp(-6 * dt);
-      player.vy *= Math.exp(-6 * dt);
+
+    const playerInRiver = Math.abs(player.y - riverY(player.x)) < 100;
+    const insideBush = shrubs.some(shrub => Math.hypot((player.x - shrub.x) / 1.5, (player.y - shrub.y) / 1.1) < 21 * shrub.scale);
+    if (insideBush && !playerHidden) showToast("The tall grass hides your little glow.");
+    playerHidden = insideBush;
+    const carryingHot = lights.some(light => light.type === "hot" && light.collected);
+    const detectionRadius = 270 + found * 15 + (carryingHot ? 160 : 0);
+
+    const speed = 205 * (playerInRiver ? .64 : 1);
+    const blend = 1 - Math.exp(-(dashTime > 0 ? 15 : 8) * dt);
+    if (dashTime > 0) {
+      player.vx += (player.dashX * 465 - player.vx) * blend;
+      player.vy += (player.dashY * 465 - player.vy) * blend;
+    } else {
+      player.vx += (ax * speed - player.vx) * blend;
+      player.vy += (ay * speed - player.vy) * blend;
+      if (magnitude === 0) {
+        player.vx *= Math.exp(-6 * dt);
+        player.vy *= Math.exp(-6 * dt);
+      }
+      if (playerInRiver) {
+        const slope = 135 / 385 * Math.cos((player.x - 200) / 385);
+        const length = Math.hypot(1, slope);
+        player.vx += 25 / length * dt;
+        player.vy += 25 * slope / length * dt;
+      }
     }
     player.x = Math.max(28, Math.min(WORLD.width - 28, player.x + player.vx * dt));
     player.y = Math.max(28, Math.min(WORLD.height - 28, player.y + player.vy * dt));
 
     for (const light of lights) {
-      if (!light.collected && Math.hypot(player.x - light.x, player.y - light.y) < 27) collect(light);
+      light.revealed = Math.max(0, light.revealed - dt);
+      if (!light.collected && Math.hypot(player.x - light.x, player.y - light.y) < 29) collect(light);
     }
 
     for (const moth of moths) {
       moth.stunned = Math.max(0, moth.stunned - dt);
       const distance = Math.hypot(player.x - moth.x, player.y - moth.y);
-      let tx = moth.homeX + Math.cos(elapsed * .7 + moth.phase) * 70;
-      let ty = moth.homeY + Math.sin(elapsed * .8 + moth.phase) * 55;
-      if (distance < 290 && moth.stunned <= 0) {
-        tx = player.x;
-        ty = player.y;
+      moth.wanderTimer -= dt;
+      if (moth.stunned > 0) {
+        moth.vx *= Math.exp(-3 * dt);
+        moth.vy *= Math.exp(-3 * dt);
+        moth.x += moth.vx * dt;
+        moth.y += moth.vy * dt;
+        continue;
       }
       if (pulseTime > 0 && distance < 205) {
         const push = Math.atan2(moth.y - player.y, moth.x - player.x);
         moth.vx += Math.cos(push) * 520 * dt;
         moth.vy += Math.sin(push) * 520 * dt;
       }
-      const direction = Math.atan2(ty - moth.y, tx - moth.x);
-      const chase = moth.stunned > 0 ? 0 : moth.speed * (distance < 290 ? 1.3 : .7);
-      moth.vx += (Math.cos(direction) * chase - moth.vx) * Math.min(1, dt * 1.8);
-      moth.vy += (Math.sin(direction) * chase - moth.vy) * Math.min(1, dt * 1.8);
-      moth.x += moth.vx * dt;
-      moth.y += moth.vy * dt;
-      if (distance < 27 && hitFlash <= 0 && moth.stunned <= 0) takeHit(moth);
+
+      if (moth.state === "windup") {
+        moth.stateTime -= dt;
+        moth.vx *= Math.exp(-8 * dt);
+        moth.vy *= Math.exp(-8 * dt);
+        if (moth.stateTime <= 0) {
+          moth.state = "dash";
+          moth.stateTime = moth.type === "dasher" ? .46 : .3;
+          const speed = (moth.type === "dasher" ? 390 : 285) * (mothSlowTime > 0 ? .48 : 1);
+          moth.vx = moth.attackX * speed;
+          moth.vy = moth.attackY * speed;
+          playTone(moth.type === "dasher" ? 280 : 220, .12, "triangle", .025);
+        }
+      } else if (moth.state === "dash") {
+        moth.stateTime -= dt;
+        moth.x += moth.vx * dt;
+        moth.y += moth.vy * dt;
+        if (moth.stateTime <= 0) {
+          moth.state = "recover";
+          moth.stateTime = .72;
+          moth.vx *= .3;
+          moth.vy *= .3;
+        }
+      } else if (moth.state === "recover") {
+        moth.stateTime -= dt;
+        moth.vx *= Math.exp(-3 * dt);
+        moth.vy *= Math.exp(-3 * dt);
+        moth.x += moth.vx * dt;
+        moth.y += moth.vy * dt;
+        if (moth.stateTime <= 0) moth.state = "idle";
+      } else {
+        let targetX = moth.homeX + Math.cos(elapsed * .55 + moth.phase) * 45;
+        let targetY = moth.homeY + Math.sin(elapsed * .62 + moth.phase) * 40;
+        const canSee = !playerHidden && distance < detectionRadius;
+        if (moth.type === "orbiter" && moth.targetLight) {
+          targetX = moth.targetLight.x + Math.cos(elapsed * 1.2 + moth.phase) * 58;
+          targetY = moth.targetLight.y + Math.sin(elapsed * 1.2 + moth.phase) * 42;
+          if (canSee && distance < 165) beginAttack(moth);
+        } else if (moth.type === "drifter") {
+          if (moth.wanderTimer <= 0 || Math.hypot(moth.x - moth.wanderX, moth.y - moth.wanderY) < 18) {
+            moth.wanderX = Math.max(80, Math.min(WORLD.width - 80, moth.homeX + (Math.random() - .5) * 310));
+            moth.wanderY = Math.max(80, Math.min(WORLD.height - 80, moth.homeY + (Math.random() - .5) * 260));
+            moth.wanderTimer = 2 + Math.random() * 2;
+          }
+          targetX = moth.wanderX;
+          targetY = moth.wanderY;
+          if (canSee && distance < 112) beginAttack(moth);
+          else if (canSee && distance < detectionRadius) {
+            const away = Math.atan2(moth.y - player.y, moth.x - player.x);
+            targetX = moth.x + Math.cos(away) * 110;
+            targetY = moth.y + Math.sin(away) * 110;
+          }
+        } else if (moth.type === "dasher") {
+          if (canSee && distance < 410 && distance > 76) beginAttack(moth);
+          else if (canSee && distance <= 76) {
+            const away = Math.atan2(moth.y - player.y, moth.x - player.x);
+            targetX = moth.x + Math.cos(away) * 130;
+            targetY = moth.y + Math.sin(away) * 130;
+          }
+        } else if (canSee) {
+          targetX = player.x;
+          targetY = player.y;
+          if (distance < 164) beginAttack(moth);
+        }
+        if (moth.state === "idle") {
+          const angle = Math.atan2(targetY - moth.y, targetX - moth.x);
+          const chaseSpeed = (moth.type === "drifter" ? moth.speed * .7 : moth.type === "chaser" ? moth.speed * .78 : moth.speed * .64) * (mothSlowTime > 0 ? .48 : 1);
+          moth.vx += (Math.cos(angle) * chaseSpeed - moth.vx) * Math.min(1, dt * 1.7);
+          moth.vy += (Math.sin(angle) * chaseSpeed - moth.vy) * Math.min(1, dt * 1.7);
+          moth.x += moth.vx * dt;
+          moth.y += moth.vy * dt;
+        }
+      }
+      moth.x = Math.max(20, Math.min(WORLD.width - 20, moth.x));
+      moth.y = Math.max(20, Math.min(WORLD.height - 20, moth.y));
+      const contact = Math.hypot(player.x - moth.x, player.y - moth.y) < 25;
+      if (contact && moth.state === "dash" && invulnerability <= 0 && dashTime <= 0 && !playerHidden) takeHit(moth);
     }
 
-    if (found === TOTAL_LIGHTS && Math.hypot(player.x - shrine.x, player.y - shrine.y) < 52) finishGame();
+    if (found === lights.length && Math.hypot(player.x - shrine.x, player.y - shrine.y) < 52) finishGame();
+  }
+
+  function beginAttack(moth) {
+    if (moth.state !== "idle") return;
+    moth.state = "windup";
+    moth.stateTime = moth.type === "dasher" ? .82 : .62;
+    const aim = Math.atan2(player.y - moth.y, player.x - moth.x);
+    moth.attackX = Math.cos(aim);
+    moth.attackY = Math.sin(aim);
+  }
+
+  function riverY(x) {
+    return 700 + 135 * Math.sin((x - 200) / 385);
   }
 
   function collect(light) {
     light.collected = true;
     found++;
+    const now = levelElapsed;
+    streak = now - lastCollectAt < 7 ? streak + 1 : 1;
+    lastCollectAt = now;
+    const bonus = 100 * streak;
+    score += bonus;
+    collectFreeze = .05;
     countLabel.textContent = found;
-    progressFill.style.width = `${found / TOTAL_LIGHTS * 100}%`;
-    burst(light.x, light.y, ["#ffdf91", "#c8e8c0", "#dad5f5", "#f6bf96"][light.hue], 19);
-    playTone(610 + found * 34, .16, "sine", .055);
-    if (found === TOTAL_LIGHTS) {
+    progressFill.style.width = `${found / lights.length * 100}%`;
+    burst(light.x, light.y, `rgb(${light.color})`, 24);
+    playTone(550 + found * 56 + streak * 26, .2, "sine", .06);
+    if (light.type === "green") {
+      const maxLives = difficultySelect.value === "cozy" ? 5 : difficultySelect.value === "moonless" ? 1 : 3;
+      if (lives < maxLives) {
+        lives++;
+        renderLives();
+        showToast("A green firefly mends one little heart.");
+      } else {
+        showToast("A green firefly glows warmly. Life is already full.");
+      }
+    } else if (light.type === "blue") {
+      mothSlowTime = 5;
+      showToast("Blue light slows the moths for a while.");
+    } else if (light.type === "hot") {
+      showToast("Hot light carried: moths can sense you from farther away.");
+    } else {
+      showToast(streak > 1 ? `Light streak x${streak} · +${bonus}` : `A light found its way back · +${bonus}`);
+    }
+    if (found === lights.length) {
       objectiveText.textContent = "The old lantern is waiting";
       showToast("Every little light remembers the way home.");
       playTone(920, .45, "sine", .07);
-    } else {
-      showToast(["A light found its way back.", "The garden feels a little warmer.", "One more little star for the lantern."][found % 3]);
     }
   }
 
   function takeHit(moth) {
     lives--;
-    hitFlash = 1.15;
-    moth.stunned = 1.8;
+    levelHitCount++;
+    hitFlash = .22;
+    invulnerability = 1.2;
+    hitShake = 1;
+    moth.state = "recover";
+    moth.stateTime = 1;
     const angle = Math.atan2(player.y - moth.y, player.x - moth.x);
-    player.vx += Math.cos(angle) * 185;
-    player.vy += Math.sin(angle) * 185;
+    player.vx += Math.cos(angle) * 230;
+    player.vy += Math.sin(angle) * 230;
     burst(player.x, player.y, "#e6b7a3", 12);
     renderLives();
     playTone(180, .2, "triangle", .06);
-    showToast(lives ? "A moth gave you a little fright." : "The night got a little too dark.");
+    showToast(lives ? "A moth gave you a little fright. Your glow will protect you briefly." : "The night was long. Try again?");
     if (lives <= 0) endGame(false);
   }
 
   function renderLives() {
-    livesLabel.innerHTML = `${"♥ ".repeat(lives)}<span class="empty">${"♥ ".repeat(3 - lives)}</span>`;
+    const maxLives = difficultySelect.value === "cozy" ? 5 : difficultySelect.value === "moonless" ? 1 : 3;
+    livesLabel.innerHTML = `${"♥ ".repeat(lives)}<span class="empty">${"♥ ".repeat(Math.max(0, maxLives - lives))}</span>`;
     livesLabel.setAttribute("aria-label", `${lives} ${lives === 1 ? "life" : "lives"}`);
   }
 
   function activatePulse() {
     if (!started || paused || finished || pulseCooldown > 0) return;
     pulseTime = .65;
-    pulseCooldown = 4.2;
+    pulseCooldown = 5;
     playTone(350, .2, "sine", .045);
+    for (const light of lights) {
+      if (!light.collected && Math.hypot(player.x - light.x, player.y - light.y) < 430) light.revealed = 5;
+    }
     for (const moth of moths) {
       if (Math.hypot(player.x - moth.x, player.y - moth.y) < 205) {
         moth.stunned = 2.2;
+        moth.state = "recover";
+        moth.stateTime = 1.25;
         const angle = Math.atan2(moth.y - player.y, moth.x - player.x);
         moth.vx += Math.cos(angle) * 185;
         moth.vy += Math.sin(angle) * 185;
         burst(moth.x, moth.y, "#e7d4a0", 7);
       }
     }
+  }
+
+  function activateDash() {
+    if (!started || paused || finished || dashCooldown > 0) return;
+    let dx = player.vx;
+    let dy = player.vy;
+    if (Math.hypot(dx, dy) < 15) {
+      dx = Math.cos(player.facing);
+      dy = Math.sin(player.facing);
+    }
+    const length = Math.hypot(dx, dy) || 1;
+    player.dashX = dx / length;
+    player.dashY = dy / length;
+    player.facing = Math.atan2(player.dashY, player.dashX);
+    dashTime = .22;
+    dashCooldown = 1.7;
+    playTone(410, .12, "sawtooth", .025);
+    burst(player.x, player.y, "#e8d9a7", 5);
   }
 
   function showToast(message) {
@@ -691,7 +1027,7 @@
       oscillator.type = type;
       oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(frequency * .72, audioContext.currentTime + duration);
-      gain.gain.setValueAtTime(volume, audioContext.currentTime);
+      gain.gain.setValueAtTime(volume * sfxLevel, audioContext.currentTime);
       gain.gain.exponentialRampToValueAtTime(.001, audioContext.currentTime + duration);
       oscillator.connect(gain);
       gain.connect(audioContext.destination);
@@ -710,14 +1046,63 @@
     soundButton.title = soundOn ? "Turn sound off" : "Turn sound on";
   }
 
+  function updateAudioLevels() {
+    ambienceLevel = Number(musicVolume.value) / 100;
+    sfxLevel = Number(sfxVolume.value) / 100;
+    if (musicGain && audioContext) {
+      musicGain.gain.setTargetAtTime(soundOn ? ambienceLevel * .035 : 0, audioContext.currentTime, .12);
+    }
+  }
+
+  function startAmbience() {
+    if (!soundOn) return;
+    try {
+      audioContext ??= new AudioContext();
+      if (audioContext.state === "suspended") audioContext.resume();
+      if (ambienceOscillators.length) return;
+      musicGain = audioContext.createGain();
+      musicGain.gain.value = ambienceLevel * .035;
+      musicGain.connect(audioContext.destination);
+      for (const [frequency, volume] of [[110, 1], [164.81, .44]]) {
+        const oscillator = audioContext.createOscillator();
+        const partialGain = audioContext.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = frequency;
+        partialGain.gain.value = volume;
+        oscillator.connect(partialGain);
+        partialGain.connect(musicGain);
+        oscillator.start();
+        ambienceOscillators.push(oscillator);
+      }
+    } catch (error) {
+      console.warn("Ambient music could not be started in this browser.", error);
+      soundOn = false;
+      updateSoundButton();
+    }
+  }
+
   function startGame() {
-    if (finished) resetGame();
+    if (finished) {
+      if (resultWon && levelIndex < LEVELS.length - 1) {
+        initializeLevel(levelIndex + 1);
+      } else if (resultWon) {
+        levelIndex = 0;
+        score = 0;
+        checkpointScore = 0;
+        initializeLevel(0);
+      } else {
+        resetGame();
+      }
+    }
+    startAmbience();
     started = true;
     paused = false;
     overlay.classList.add("hidden");
+    overlay.classList.remove("settings-visible");
     pauseButton.textContent = "Ⅱ";
     pauseButton.setAttribute("aria-label", "Pause game");
     lastFrame = performance.now();
+    accumulator = 0;
   }
 
   function togglePause() {
@@ -725,29 +1110,45 @@
     paused = !paused;
     overlayTitle.textContent = paused ? "Take a breath" : "Mothlight";
     overlayCopy.innerHTML = paused
-      ? "The little lights will wait.<br>The garden isn't going anywhere."
+      ? "The little lights will wait.<br>Choose a mood, adjust the sound, or begin again."
       : "The moon has misplaced its little lights.<br>Wander the garden, gather them up, and<br>bring their glow back to the old lantern.";
     startButton.querySelector("span:first-child").textContent = paused ? "Back to wandering" : "Begin wandering";
     overlay.classList.toggle("hidden", !paused);
+    overlay.classList.toggle("settings-visible", paused);
     pauseButton.textContent = paused ? "▶" : "Ⅱ";
     pauseButton.setAttribute("aria-label", paused ? "Resume game" : "Pause game");
-    if (!paused) lastFrame = performance.now();
+    if (!paused) {
+      lastFrame = performance.now();
+      accumulator = 0;
+    }
   }
 
   function finishGame() {
-    finished = true;
     endGame(true);
   }
 
   function endGame(won) {
     finished = true;
     paused = false;
-    overlayTitle.textContent = won ? "Home, at last" : "The moths win this round";
+    resultWon = won;
+    const isFinalLevel = levelIndex === LEVELS.length - 1;
+    const starsEarned = levelHitCount === 0 && levelElapsed < 130 ? 3 : levelHitCount <= 1 ? 2 : 1;
+    if (won) {
+      score += starsEarned * 250;
+      recordBestTime();
+      checkpointScore = score;
+    }
+    overlayTitle.textContent = won
+      ? isFinalLevel ? "Home, at last" : `${LEVELS[levelIndex].name} complete`
+      : "The night was long";
     overlayCopy.innerHTML = won
-      ? `You gathered every little light and brought it home.<br>The whole garden is glowing because of you.`
-      : `The garden is still here, and so are its lights.<br>Take a breath. You can always try again.`;
-    startButton.querySelector("span:first-child").textContent = "Wander again";
+      ? `${isFinalLevel ? "You brought every little light home." : "The lantern keeps your place for next time."}<br>${"★".repeat(starsEarned)}${"☆".repeat(3 - starsEarned)} · ${formatTime(levelElapsed)} · ${score.toLocaleString()} stardust<br>Best ${formatTime(bestTimes[String(levelIndex)] || levelElapsed)}`
+      : `The garden is still here, and so are its lights.<br>Take a breath. Your lantern is a checkpoint.`;
+    startButton.querySelector("span:first-child").textContent = won
+      ? isFinalLevel ? "Wander again" : "Next garden"
+      : "Try this garden again";
     overlay.classList.remove("hidden");
+    overlay.classList.add("settings-visible");
     pauseButton.textContent = "Ⅱ";
     pauseButton.setAttribute("aria-label", "Pause game");
     if (won) {
@@ -758,27 +1159,33 @@
   }
 
   function resetGame() {
-    lives = 3;
-    found = 0;
     pulseTime = 0;
-    pulseCooldown = 0;
     hitFlash = 0;
-    finished = false;
-    player.x = 1100;
-    player.y = 790;
-    player.vx = 0;
-    player.vy = 0;
-    lights.forEach(light => { light.collected = false; });
-    moths.forEach(moth => {
-      moth.x = moth.homeX; moth.y = moth.homeY; moth.vx = 0; moth.vy = 0; moth.stunned = 0;
-    });
+    invulnerability = 0;
+    dashTime = 0;
+    score = checkpointScore;
     motes.length = 0;
-    countLabel.textContent = "0";
-    progressFill.style.width = "0";
-    objectiveText.textContent = "Find the scattered lights";
-    overlayTitle.innerHTML = "Moth<span>light</span>";
-    renderLives();
+    initializeLevel(levelIndex);
     startGame();
+  }
+
+  function recordBestTime() {
+    try {
+      bestTimes = JSON.parse(localStorage.getItem("mothlight-best-times") || "{}");
+      const key = String(levelIndex);
+      if (!bestTimes[key] || levelElapsed < bestTimes[key]) {
+        bestTimes[key] = levelElapsed;
+        localStorage.setItem("mothlight-best-times", JSON.stringify(bestTimes));
+      }
+    } catch (error) {
+      console.warn("Could not save the local best time.", error);
+    }
+  }
+
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
+    return `${minutes}:${remainder}`;
   }
 
   function canvasPoint(event) {
@@ -794,7 +1201,12 @@
       return;
     }
     if (key === " ") {
+      if (event.repeat) return;
       activatePulse();
+      return;
+    }
+    if (key === "shift") {
+      if (!event.repeat) activateDash();
       return;
     }
     pointer.active = false;
@@ -821,15 +1233,27 @@
   startButton.addEventListener("click", startGame);
   pauseButton.addEventListener("click", togglePause);
   pulseButton.addEventListener("click", activatePulse);
+  dashButton.addEventListener("click", activateDash);
+  restartButton.addEventListener("click", resetGame);
+  difficultySelect.addEventListener("change", () => {
+    if (!started) initializeLevel(levelIndex);
+    else if (paused) showToast("Mood changes apply when you restart this garden.");
+  });
+  musicVolume.addEventListener("input", updateAudioLevels);
+  sfxVolume.addEventListener("input", updateAudioLevels);
   soundButton.addEventListener("click", () => {
     soundOn = !soundOn;
     updateSoundButton();
+    updateAudioLevels();
+    if (soundOn) startAmbience();
     if (soundOn) playTone(520, .1, "sine", .035);
   });
 
-  totalLabel.textContent = TOTAL_LIGHTS;
   seedWorld();
+  initializeLevel(0);
+  overlay.classList.add("settings-visible");
   resize();
+  updateAudioLevels();
   updateSoundButton();
   requestAnimationFrame(frame);
 })();

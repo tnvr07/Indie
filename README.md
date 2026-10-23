@@ -1,12 +1,15 @@
 # Mothlight
 
-A tiny, self-contained moonlit-garden adventure. Open `index.html` in a modern browser—there is no build step or package installation.
+A self-contained, moonlit-garden adventure. Open `index.html` in a modern browser—there is no build step or package installation.
 
 ## How to play
 
-- Move with **WASD** or the **arrow keys**. On a touch screen, tap the garden to wander toward a spot.
-- Gather all **10 wandering lights**, then find the old lantern near the top of the garden.
-- A moth touch costs a life. Press **Space** or use **Moon Pulse** to shoo nearby moths; the pulse recharges after a few seconds.
-- Press **P** or **Escape** to pause. Use the top-right buttons to pause or toggle sound.
+- Move with **WASD** or the **arrow keys**. On a touch screen, tap the garden to wander.
+- Gather each garden's lights and bring them to its lantern. Four short gardens introduce different moths and challenges.
+- **Gold** lights build a collection streak. **Green** lights restore a heart, **blue** lights slow moths, and carrying a **hot** light attracts moths from farther away.
+- Moths telegraph their lunges before attacking. **Moon Pulse** stuns nearby moths and reveals nearby lights; it recharges over time. **Shift** or the Dash button gives you a short burst of speed.
+- Water slows your steps and pushes you along; dense bushes conceal you from moths.
+- A hit knocks you back and briefly protects you from another hit. Earn up to three stars for a quick, careful run.
+- Press **P** or **Escape** to pause. Choose Cozy, Wanderer, or Moonless difficulty, adjust music and effects, or restart from the current garden checkpoint.
 
-The garden, characters, particles, and effects are drawn in Canvas; the little chime sounds are generated in the browser. The game has no external image or audio assets. Its Canvas implementation follows the [MDN Canvas API tutorial](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial).
+The garden, characters, particles, and effects are drawn in Canvas, with ambient music and chime sounds generated in the browser. Local best times are saved in the browser. The game has no external image or audio assets. Its Canvas implementation follows the [MDN Canvas API tutorial](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial).

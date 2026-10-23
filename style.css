@@ -40,7 +40,7 @@ button { font: inherit; }
 
 #world { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
-.topbar, .hud, .objective, .pulse-button, .footer-note, .overlay, .toast { position: absolute; z-index: 2; }
+.topbar, .hud, .objective, .action-buttons, .footer-note, .overlay, .toast { position: absolute; z-index: 2; }
 .topbar {
   top: 0; left: 0; right: 0; height: 91px; padding: 21px 5.15%;
   display: flex; align-items: center; justify-content: space-between;
@@ -63,7 +63,8 @@ button { font: inherit; }
   min-width: 139px; padding: 12px 14px 11px; border: 1px solid rgba(244, 238, 214, .14);
   border-radius: 5px; background: rgba(9, 20, 27, .42); backdrop-filter: blur(8px);
 }
-.hud-eyebrow { display: block; color: #bec7bd; font: 9px var(--mono); letter-spacing: .11em; }
+.light-counter { min-width: 232px; }
+.hud-eyebrow { display: block; color: #e1e5da; font: 10px var(--mono); letter-spacing: .09em; }
 .counter-line { display: flex; align-items: baseline; gap: 7px; margin-top: 4px; }
 .counter-line strong { color: #faf2dc; font: 500 26px "Fraunces", Georgia, serif; }
 .counter-icon { color: var(--gold); font-size: 14px; }
@@ -77,18 +78,20 @@ button { font: inherit; }
 
 .objective {
   top: 122px; right: 5.15%; display: flex; gap: 9px; align-items: center;
-  color: #e3e3d7; font: 10px var(--mono); letter-spacing: .05em; text-shadow: 0 1px 8px #101c26;
+  color: #f2f1e6; font: 12px var(--mono); letter-spacing: .035em; text-shadow: 0 1px 8px #101c26;
 }
 .objective-dot { width: 7px; height: 7px; border-radius: 50%; background: #f2d387; box-shadow: 0 0 12px #f1c967; }
-.pulse-button {
-  right: 5.15%; bottom: 55px; padding: 13px 16px; border: 1px solid rgba(244, 220, 158, .36);
+.action-buttons { right: 5.15%; bottom: 55px; display: flex; gap: 9px; }
+.pulse-button, .dash-button {
+  padding: 13px 14px; border: 1px solid rgba(244, 220, 158, .42);
   border-radius: 3px; background: rgba(13, 28, 35, .58); color: #f4d78e; cursor: pointer;
   font-size: 15px; transition: background .2s, transform .2s;
 }
-.pulse-button:hover:not(:disabled) { transform: translateY(-2px); background: rgba(49, 57, 48, .8); }
-.pulse-button span { margin-left: 5px; font: 9px var(--mono); letter-spacing: .1em; }
-.pulse-button kbd { margin-left: 9px; color: #bac4b8; }
-.pulse-button:disabled { color: #b2b7a4; opacity: .55; cursor: default; }
+.dash-button { color: #d7e6d2; border-color: rgba(184, 219, 191, .34); }
+.pulse-button:hover:not(:disabled), .dash-button:hover:not(:disabled) { transform: translateY(-2px); background: rgba(49, 57, 48, .8); }
+.pulse-button span, .dash-button span { margin-left: 5px; font: 9px var(--mono); letter-spacing: .1em; }
+.pulse-button kbd, .dash-button kbd { margin-left: 9px; color: #d3d8cb; }
+.pulse-button:disabled, .dash-button:disabled { color: #b2b7a4; opacity: .62; cursor: default; }
 kbd { font-family: var(--mono); font-size: 9px; }
 .footer-note {
   right: 5.15%; bottom: 20px; left: 5.15%; display: flex; justify-content: center; align-items: center; gap: 15px;
@@ -97,13 +100,13 @@ kbd { font-family: var(--mono); font-size: 9px; }
 .footer-sparkle { color: #e9c981; font-size: 12px; }
 
 .overlay {
-  z-index: 3; inset: 0; display: grid; place-items: center; padding: 90px 20px;
+  z-index: 3; inset: 0; display: grid; place-items: center; padding: 16px 20px;
   background: rgba(8, 17, 23, .51); backdrop-filter: blur(2px);
   opacity: 1; visibility: visible; transition: opacity .55s, visibility .55s;
 }
 .overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .overlay-card {
-  width: min(460px, 100%); margin-top: 25px; text-align: center;
+  width: min(460px, 100%); max-height: 100%; overflow-y: auto; padding: 12px 0; text-align: center;
   animation: drift-in .8s cubic-bezier(.2, .8, .2, 1) both;
 }
 @keyframes drift-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
@@ -115,6 +118,13 @@ h1 { margin: 0; color: #f7f0db; font: 500 clamp(68px, 10vw, 94px)/.96 "Fraunces"
 h1 span { color: #f1ce84; font-style: italic; }
 .subtitle { margin: 10px 0 23px; color: #e4d8b6; font: italic 16px "Fraunces", Georgia, serif; letter-spacing: .035em; }
 .story { margin: 0 auto 25px; color: #d0d6cc; font-size: 13px; line-height: 1.85; }
+.settings { display: none; width: min(310px, 100%); margin: -8px auto 18px; padding: 11px 13px; border: 1px solid rgba(239, 229, 200, .17); border-radius: 4px; background: rgba(9, 20, 27, .48); }
+.settings-visible .settings { display: grid; gap: 9px; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #ece9db; font: 10px var(--mono); text-align: left; }
+.setting-row select { width: 108px; padding: 5px 7px; border: 1px solid rgba(239, 229, 200, .3); border-radius: 3px; background: #172923; color: #f1ead7; font: 10px var(--mono); }
+.setting-row input { width: 128px; accent-color: #e9c983; }
+.secondary-button { justify-self: center; margin-top: 2px; padding: 6px 9px; border: 1px solid rgba(239, 229, 200, .23); border-radius: 3px; background: transparent; color: #d4d9ce; font: 9px var(--mono); cursor: pointer; }
+.secondary-button:hover { border-color: rgba(244, 205, 125, .7); color: #f4d78e; }
 .start-button {
   display: inline-flex; justify-content: space-between; align-items: center; gap: 28px; min-width: 205px; padding: 13px 16px;
   border: 1px solid rgba(251, 222, 161, .65); border-radius: 3px; background: #e9c983; color: #24302c;
@@ -143,19 +153,25 @@ h1 span { color: #f1ce84; font-style: italic; }
   .icon-button { width: 35px; height: 35px; }
   .hud { top: 84px; left: 15px; gap: 7px; }
   .hud-card { min-width: 112px; padding: 9px 10px 8px; }
-  .hud-eyebrow { font-size: 8px; }
+  .light-counter { min-width: 184px; }
+  .hud-eyebrow { font-size: 9px; }
   .counter-line strong { font-size: 23px; }
-  .life-card { min-width: 96px; }
+  .life-card { min-width: 110px; }
   .hearts { font-size: 14px; }
-  .objective { top: 164px; right: auto; left: 17px; max-width: 170px; font-size: 8px; }
-  .pulse-button { right: 15px; bottom: 48px; padding: 11px 12px; }
-  .pulse-button kbd { display: none; }
+  .objective { top: 164px; right: 15px; left: 17px; max-width: 190px; font-size: 9px; }
+  .action-buttons { right: 15px; bottom: 48px; gap: 6px; }
+  .pulse-button, .dash-button { padding: 11px 9px; font-size: 13px; }
+  .pulse-button span, .dash-button span { font-size: 8px; }
+  .pulse-button kbd, .dash-button kbd { display: none; }
   .footer-note { bottom: 16px; font-size: 7px; letter-spacing: .12em; }
   .controls { flex-wrap: wrap; font-size: 9px; }
   .touch-note { display: block; }
-  .overlay { padding: 75px 18px; }
-  .overlay-card { margin-top: 9px; }
+  .overlay { padding: 12px 18px; }
   .story { font-size: 12px; }
+  .title-ornament { margin-top: 11px; }
+  .subtitle { margin-bottom: 15px; }
+  .story { margin-bottom: 16px; }
+  .controls { margin-top: 15px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
