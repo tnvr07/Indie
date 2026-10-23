@@ -2,7 +2,12 @@
   "use strict";
 
   const canvas = document.querySelector("#world");
-  const ctx = canvas.getContext("2d", { alpha: false });
+  const screenContext = canvas.getContext("2d", { alpha: false });
+  const backgroundCanvas = document.createElement("canvas");
+  backgroundCanvas.width = 2200;
+  backgroundCanvas.height = 1500;
+  const backgroundContext = backgroundCanvas.getContext("2d", { alpha: false });
+  let ctx = screenContext;
   const overlay = document.querySelector("#overlay");
   const startButton = document.querySelector("#start-button");
   const pauseButton = document.querySelector("#pause-button");
@@ -233,6 +238,14 @@
   function visibleInWorld(x, y, margin = 48) {
     return x >= camera.x - margin && x <= camera.x + viewWidth + margin
       && y >= camera.y - margin && y <= camera.y + viewHeight + margin;
+  }
+
+  function prepareBackground() {
+    ctx = backgroundContext;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawWorld(0);
+    ctx = screenContext;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function drawWorld(time) {
@@ -710,7 +723,7 @@
     const shakeX = hitShake > 0 ? (Math.random() - .5) * hitShake * 14 : 0;
     const shakeY = hitShake > 0 ? (Math.random() - .5) * hitShake * 14 : 0;
     ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
-    drawWorld(elapsed);
+    ctx.drawImage(backgroundCanvas, 0, 0);
     for (const light of lights) {
       if (visibleInWorld(light.x, light.y, 45)) drawLight(light, elapsed);
     }
@@ -1399,6 +1412,7 @@
   initializeLevel(0);
   overlay.classList.add("settings-visible");
   resize();
+  prepareBackground();
   updateAudioLevels();
   updateSoundButton();
   requestAnimationFrame(frame);
